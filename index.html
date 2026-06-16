@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>잉키 보이스 시네마</title>
+    <style>
+        /* 영화관 테마 & 모바일 반응형 설정 */
+        body {
+            background: radial-gradient(circle at center, #2c0e10 0%, #000000 100%);
+            color: #fff;
+            font-family: 'Pretendard', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .header { margin-bottom: 20px; }
+        h1 { color: #d4af37; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); font-size: 2em; margin-bottom: 5px; }
+        p.subtitle { color: #bbb; margin-top: 0; font-size: 1em; }
+        
+        .genre-grid {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button.genre-btn {
+            background-color: #1a1a1a;
+            color: #ccc;
+            border: 2px solid #444;
+            padding: 12px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1 1 calc(33.333% - 20px);
+            max-width: 150px;
+        }
+        @media (max-width: 600px) {
+            button.genre-btn { flex: 1 1 calc(50% - 20px); }
+        }
+        button.genre-btn:hover, button.genre-btn.active {
+            background-color: #8b0000;
+            border-color: #d4af37;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+        }
+
+        .studio-container {
+            background: #111;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: relative;
+        }
+        
+        video {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+            box-shadow: 0 0 20px rgba(0,0,0,1);
+            border: 1px solid #333;
+        }
+
+        button.record-btn {
+            background: linear-gradient(135deg, #d4af37, #aa8623);
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.3);
+        }
+        button.record-btn:disabled { background: #555; color: #888; cursor: not-allowed; box-shadow: none; }
+        
+        #status { margin-top: 15px; font-size: 1.1rem; color: #d4af37; font-weight: bold; }
+
+        .result-section { display: none; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #d4af37; }
+        .qr-container { background: #fff; padding: 15px; border-radius: 10px; display: inline-block; margin-top: 15px; }
+        #qrCode { width: 150px; height: 150px; }
+        .loading-spinner { display: none; color: #fff; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🎬 잉키 보이스 시네마</h1>
+        <p class="subtitle">내 목소리로 완성하는 6가지 영화 세상</p>
+    </div>
+
+    <div class="genre-grid">
+        <button class="genre-btn" data-file="fantasy.mp4">판타지</button>
+        <button class="genre-btn" data-file="animation.mp4">애니메이션</button>
+        <button class="genre-btn" data-file="horror.mp4">호러 코믹</button>
+        <button class="genre-btn" data-file="action.mp4">액션</button>
+        <button class="genre-btn" data-file="drama.mp4">드라마</button>
+        <button class="genre-btn" data-file="sitcom.mp4">시트콤</button>
+    </div>
+
+    <div class="studio-container">
+        <video id="previewVideo" muted playsinline></video>
+        <button id="recordBtn" class="record-btn" disabled>장르를 선택하세요</button>
+        <div id="status"></div>
+    </div>
+
+    <div id="loading" class="loading-spinner">
+        ⏳ 구글 드라이브로 영상을 전송 중입니다... (약 5~10초 소요)
+    </div>
+
+    <div id="resultSection" class="result-section">
+        <h2 style="color: #d4af37;">🎉 더빙 완성!</h2>
+        <video id="resultVideo" controls playsinline style="max-width: 400px;"></video>
+        <br>
+        <p style="color: #bbb; margin-bottom: 5px;">👇 스마트폰으로 스캔하여 영상을 저장하세요!</p>
+        <div class="qr-container">
+            <img id="qrCode" src="" alt="QR Code">
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ [필수] 1단계에서 복사한 구글 앱스 스크립트 웹 앱 URL을 아래에 꼭! 붙여넣으세요.
+        const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwMV3A_hTDu82dgJDDlWd6AvgDUpQHBMfpJBv3KwiVC9rYEqpFXLnxOBjBlaswZQful/exec";
+
+        const genreBtns = document.querySelectorAll('.genre-btn');
+        const previewVideo = document.getElementById('previewVideo');
+        const recordBtn = document.getElementById('recordBtn');
+        const statusText = document.getElementById('status');
+        const loadingDiv = document.getElementById('loading');
+        
+        const resultSection = document.getElementById('resultSection');
+        const resultVideo = document.getElementById('resultVideo');
+        const qrCodeImg = document.getElementById('qrCode');
+
+        let audioStream;
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        // 마이크 권한 요청
+        async function initMic() {
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                alert("마이크 권한을 허용해야 더빙이 가능합니다!");
+            }
+        }
+        initMic();
+
+        genreBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                genreBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                previewVideo.src = btn.getAttribute('data-file');
+                previewVideo.load();
+                
+                recordBtn.disabled = false;
+                recordBtn.innerText = "🎙️ 더빙 시작 (클릭 시 재생)";
+                statusText.innerText = "준비 완료!";
+                resultSection.style.display = 'none';
+                loadingDiv.style.display = 'none';
+            });
+        });
+
+        recordBtn.addEventListener('click', () => {
+            if (!audioStream) { alert("마이크가 연결되지 않았습니다."); return; }
+
+            const videoStream = previewVideo.captureStream ? previewVideo.captureStream() : previewVideo.mozCaptureStream();
+            const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+
+            mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                
+                // 화면에 결과 비디오 띄우기
+                resultVideo.src = URL.createObjectURL(blob);
+                
+                // 구글 드라이브 업로드 프로세스 시작
+                statusText.innerText = "녹음 종료! 서버로 업로드합니다.";
+                recordBtn.disabled = true;
+                loadingDiv.style.display = 'block';
+
+                uploadToGoogleDrive(blob);
+            };
+
+            previewVideo.currentTime = 0;
+            previewVideo.play();
+            mediaRecorder.start();
+            
+            recordBtn.disabled = true;
+            recordBtn.innerText = "🔴 녹음 중... (영상 종료 시 자동 완료)";
+            statusText.innerText = "화면에 맞춰 더빙을 시작하세요!";
+
+            previewVideo.onended = () => mediaRecorder.stop();
+        });
+
+        // 구글 드라이브 업로드 함수
+        function uploadToGoogleDrive(blob) {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result.split(',')[1];
+                
+                const payload = {
+                    filename: `inky_voice_${Date.now()}.webm`,
+                    mimeType: 'video/webm',
+                    base64: base64data
+                };
+
+                try {
+                    const response = await fetch(GOOGLE_WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                        headers: { "Content-Type": "text/plain;charset=utf-8" } // CORS 에러 방지용 text/plain
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        loadingDiv.style.display = 'none';
+                        resultSection.style.display = 'block';
+                        statusText.innerText = "업로드 완료! QR 코드를 스캔하세요.";
+                        
+                        // 구글 드라이브 링크를 QR 코드로 변환 (QR Server API 사용)
+                        qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(result.url)}`;
+                        recordBtn.innerText = "🎙️ 다시 녹음하기";
+                        recordBtn.disabled = false;
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    alert("업로드 중 오류가 발생했습니다: " + error.message);
+                    loadingDiv.style.display = 'none';
+                    recordBtn.disabled = false;
+                }
+            };
+        }
+    </script>
+</body>
+</html>
